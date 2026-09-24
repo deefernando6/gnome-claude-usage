@@ -2,6 +2,6 @@
   "uuid": "claude-usage@orangehrm.com",
   "name": "Claude Usage",
   "description": "Shows Claude session (5h) and weekly usage limits in the top bar.",
-  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "shell-version": ["3.36", "3.38", "40", "41", "42", "43", "44"],
   "version": 1
 }

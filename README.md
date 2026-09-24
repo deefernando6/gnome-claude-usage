@@ -24,15 +24,46 @@ up automatically. The extension never refreshes or writes the token itself.
 Polls every 5 minutes, plus on menu open if the data is older than 60s,
 plus on demand via "Refresh now".
 
+## Requirements
+
+- Claude Code installed and logged in with a Claude subscription (`claude` → `/login`).
+- GNOME Shell 3.36 or newer. Check with `gnome-shell --version`.
+
+| GNOME Shell | Ubuntu | Build |
+|---|---|---|
+| 45 – 50 | 24.04 and newer | repo root |
+| 3.36 – 44 | 20.04, 22.04 | `legacy/` |
+
+GNOME 45 switched extensions to ES modules, which older shells cannot load,
+so `legacy/extension.js` is a port of `extension.js` to the old `imports.*`
+API. Change both when changing behaviour.
+
 ## Install
 
-    ln -sfn ~/workspace/claude/gnome-claude-usage \
+Clone once, then link the build that matches your GNOME version:
+
+    git clone https://github.com/deefernando6/gnome-claude-usage.git \
+        ~/.local/share/gnome-claude-usage
+
+    # GNOME 45 – 50 (Ubuntu 24.04+)
+    ln -sfn ~/.local/share/gnome-claude-usage \
         ~/.local/share/gnome-shell/extensions/claude-usage@orangehrm.com
+
+    # GNOME 3.36 – 44 (Ubuntu 20.04 / 22.04)
+    ln -sfn ~/.local/share/gnome-claude-usage/legacy \
+        ~/.local/share/gnome-shell/extensions/claude-usage@orangehrm.com
+
+Restart GNOME Shell so it discovers the extension:
+
+- **Wayland:** log out and back in.
+- **X11** (default on Ubuntu 20.04): press `Alt+F2`, type `r`, press Enter.
+
+Then:
+
     gnome-extensions enable claude-usage@orangehrm.com
 
-On Wayland the running shell will not pick up a newly installed
-extension — log out and back in once. After that, normal
-enable/disable works without a logout.
+Update later with `git -C ~/.local/share/gnome-claude-usage pull`, then
+restart the shell as above.
 
 ## Tuning
 
@@ -56,6 +87,7 @@ field is preferred, with a percent-based fallback (<70 normal,
 
     gnome-extensions disable claude-usage@orangehrm.com
     rm ~/.local/share/gnome-shell/extensions/claude-usage@orangehrm.com
+    rm -rf ~/.local/share/gnome-claude-usage
 
 ## Note
 

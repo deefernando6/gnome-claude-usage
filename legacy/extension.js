@@ -1,15 +1,20 @@
-import St from 'gi://St';
-import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
-import GObject from 'gi://GObject';
-import Clutter from 'gi://Clutter';
-import Soup from 'gi://Soup?version=3.0';
+/* Legacy build for GNOME Shell 3.36 – 44 (Ubuntu 20.04, 22.04).
+ *
+ * GNOME 45+ requires ES modules, which older shells cannot load, so this is a
+ * port of ../extension.js to the old imports.* API. Keep the two in sync.
+ *
+ * Written for GJS 1.64 (SpiderMonkey 68): no optional chaining (?.), no
+ * nullish coalescing (??), no class fields, no TextDecoder.
+ */
+'use strict';
 
-import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
-import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
-import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
-import {PACKAGE_VERSION} from 'resource:///org/gnome/shell/misc/config.js';
+const {St, Gio, GLib, GObject, Clutter, Soup} = imports.gi;
+const ByteArray = imports.byteArray;
+
+const Main = imports.ui.main;
+const PanelMenu = imports.ui.panelMenu;
+const PopupMenu = imports.ui.popupMenu;
+const ExtensionUtils = imports.misc.extensionUtils;
 
 const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
 const OAUTH_BETA = 'oauth-2025-04-20';
@@ -21,10 +26,21 @@ const REFRESH_SECONDS = 300;
 const STALE_SECONDS = 60;
 const BAR_WIDTH = 240;
 
-// St.BoxLayout gained `orientation` in GNOME 48; older shells only know `vertical`.
-const VERTICAL = parseInt(PACKAGE_VERSION) >= 48
-    ? {orientation: Clutter.Orientation.VERTICAL}
-    : {vertical: true};
+// GNOME 3.36 – 42 ship libsoup 2.4; GNOME 43 – 44 ship libsoup 3.
+const SOUP3 = Soup.MAJOR_VERSION >= 3;
+
+function get(obj, ...path) {
+    for (const key of path) {
+        if (obj === null || obj === undefined)
+            return undefined;
+        obj = obj[key];
+    }
+    return obj;
+}
+
+function num(v) {
+    return v === null || v === undefined ? 0 : v;
+}
 
 function severityClass(severity, percent) {
     if (severity === 'critical' || severity === 'warning' || severity === 'normal')
@@ -37,10 +53,12 @@ function severityClass(severity, percent) {
 // "weekly_scoped" + {model:{display_name:"Opus"}} -> "Weekly (Opus)"
 function limitTitle(limit) {
     const scopeBits = [];
-    if (limit.scope?.model?.display_name)
-        scopeBits.push(limit.scope.model.display_name);
-    if (limit.scope?.surface)
-        scopeBits.push(limit.scope.surface);
+    const model = get(limit, 'scope', 'model', 'display_name');
+    const surface = get(limit, 'scope', 'surface');
+    if (model)
+        scopeBits.push(model);
+    if (surface)
+        scopeBits.push(surface);
     const scope = scopeBits.length ? ` (${scopeBits.join(', ')})` : '';
 
     switch (limit.kind) {
@@ -146,7 +164,7 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         });
 
         const col = new St.BoxLayout({
-            ...VERTICAL,
+            vertical: true,
             x_expand: true,
         });
 
@@ -154,7 +172,7 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
             x_expand: true,
         });
 
-        const percent = Math.round(limit.percent ?? 0);
+        const percent = Math.round(num(limit.percent));
         const sev = severityClass(limit.severity, percent);
 
         const title = new St.Label({
@@ -205,7 +223,7 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         const limits = Array.isArray(data.limits) ? data.limits : [];
         // Show the two headline limits always; scoped ones only once they are in use.
         const shown = limits.filter(l =>
-            l.kind === 'session' || l.kind === 'weekly_all' || (l.percent ?? 0) > 0);
+            l.kind === 'session' || l.kind === 'weekly_all' || num(l.percent) > 0);
 
         if (shown.length === 0) {
             this._addNote('No usage limits reported.');
@@ -215,7 +233,7 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         }
 
         const extra = data.extra_usage;
-        if (extra?.is_enabled && extra.utilization !== null) {
+        if (extra && extra.is_enabled && extra.utilization !== null) {
             this._addRow({
                 kind: 'extra',
                 percent: extra.utilization,
@@ -239,7 +257,7 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
             label.style_class = 'ccu-panel-label ccu-unknown';
             return;
         }
-        const percent = Math.round(limit.percent ?? 0);
+        const percent = Math.round(num(limit.percent));
         label.text = `${percent}%`;
         label.style_class =
             `ccu-panel-label ccu-${severityClass(limit.severity, percent)}`;
@@ -266,8 +284,8 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
             let token;
             try {
                 const [, contents] = f.load_contents_finish(res);
-                const creds = JSON.parse(new TextDecoder().decode(contents));
-                token = creds?.claudeAiOauth?.accessToken;
+                const creds = JSON.parse(ByteArray.toString(contents));
+                token = get(creds, 'claudeAiOauth', 'accessToken');
             } catch (e) {
                 this._inFlight = false;
                 this._renderError('Could not read ~/.claude/.credentials.json');
@@ -288,37 +306,57 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         msg.request_headers.append('Authorization', `Bearer ${token}`);
         msg.request_headers.append('anthropic-beta', OAUTH_BETA);
 
-        this._session.send_and_read_async(
-            msg, GLib.PRIORITY_DEFAULT, this._cancellable, (sess, res) => {
-                this._inFlight = false;
-                this._fetchedAt = GLib.get_monotonic_time() / 1e6;
-
-                let body;
-                try {
-                    body = sess.send_and_read_finish(res);
-                } catch (e) {
-                    if (!e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
-                        this._renderError(`Network error: ${e.message}`);
+        if (SOUP3) {
+            this._session.send_and_read_async(
+                msg, GLib.PRIORITY_DEFAULT, this._cancellable, (sess, res) => {
+                    let text;
+                    try {
+                        text = ByteArray.toString(sess.send_and_read_finish(res).get_data());
+                    } catch (e) {
+                        this._done();
+                        if (!(e.matches && e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED)))
+                            this._renderError(`Network error: ${e.message}`);
+                        return;
+                    }
+                    this._handleResponse(msg.get_status(), text);
+                });
+        } else {
+            this._session.queue_message(msg, (_sess, m) => {
+                // 1 = SOUP_STATUS_CANCELLED (session aborted on disable)
+                if (m.status_code === Soup.Status.CANCELLED) {
+                    this._done();
                     return;
                 }
-
-                const status = msg.get_status();
-                if (status === 401 || status === 403) {
-                    this._renderError('Token rejected. Run `claude` to re-authenticate.');
+                if (m.status_code < 100) {
+                    this._done();
+                    this._renderError(`Network error: ${Soup.Status.get_phrase(m.status_code)}`);
                     return;
                 }
-                if (status !== 200) {
-                    this._renderError(`HTTP ${status} from the usage API`);
-                    return;
-                }
-
-                try {
-                    const text = new TextDecoder().decode(body.get_data());
-                    this._render(JSON.parse(text));
-                } catch (e) {
-                    this._renderError(`Bad response: ${e.message}`);
-                }
+                this._handleResponse(m.status_code, m.response_body.data);
             });
+        }
+    }
+
+    _done() {
+        this._inFlight = false;
+        this._fetchedAt = GLib.get_monotonic_time() / 1e6;
+    }
+
+    _handleResponse(status, text) {
+        this._done();
+        if (status === 401 || status === 403) {
+            this._renderError('Token rejected. Run `claude` to re-authenticate.');
+            return;
+        }
+        if (status !== 200) {
+            this._renderError(`HTTP ${status} from the usage API`);
+            return;
+        }
+        try {
+            this._render(JSON.parse(text));
+        } catch (e) {
+            this._renderError(`Bad response: ${e.message}`);
+        }
     }
 
     start() {
@@ -341,15 +379,26 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
     }
 });
 
-export default class ClaudeUsageExtension extends Extension {
+class ClaudeUsageExtension {
+    constructor(uuid) {
+        this._uuid = uuid;
+        this._indicator = null;
+    }
+
     enable() {
         this._indicator = new ClaudeUsageIndicator();
-        Main.panel.addToStatusArea(this.uuid, this._indicator);
+        Main.panel.addToStatusArea(this._uuid, this._indicator);
         this._indicator.start();
     }
 
     disable() {
-        this._indicator?.destroy();
-        this._indicator = null;
+        if (this._indicator) {
+            this._indicator.destroy();
+            this._indicator = null;
+        }
     }
+}
+
+function init() {
+    return new ClaudeUsageExtension(ExtensionUtils.getCurrentExtension().metadata.uuid);
 }
