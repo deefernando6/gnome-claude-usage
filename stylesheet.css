@@ -1,0 +1,57 @@
+.ccu-panel-box {
+    spacing: 4px;
+}
+
+.ccu-panel-label {
+    font-feature-settings: "tnum";
+}
+
+.ccu-sep-label {
+    opacity: 120;
+}
+
+.ccu-normal   { color: #8ff0a4; }
+.ccu-warning  { color: #f8e45c; }
+.ccu-critical { color: #ff7b63; }
+.ccu-unknown  { color: #9a9996; }
+
+.ccu-row {
+    spacing: 6px;
+    padding: 2px 0;
+}
+
+.ccu-row-title {
+    font-weight: bold;
+}
+
+.ccu-row-sub {
+    font-size: 0.85em;
+    opacity: 160;
+}
+
+.ccu-bar-track {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    height: 7px;
+    width: 240px;
+}
+
+.ccu-bar-fill {
+    border-radius: 4px;
+    height: 7px;
+}
+
+.ccu-fill-normal   { background-color: #57e389; }
+.ccu-fill-warning  { background-color: #f6d32d; }
+.ccu-fill-critical { background-color: #ed553b; }
+
+.ccu-footer {
+    font-size: 0.85em;
+    opacity: 140;
+    padding-top: 4px;
+}
+
+.ccu-error {
+    color: #ff7b63;
+    font-size: 0.9em;
+}
